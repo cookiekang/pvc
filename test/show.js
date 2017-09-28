@@ -47,7 +47,7 @@ var pvc = new Pvc({
 
 // advanced api
 // show history 50
-// pvc.showHistory()
+pvc.showHistory()
 // 发布版本
 // pvc.publish('just another new version')
 // 回退到上一个版本
@@ -56,7 +56,7 @@ var pvc = new Pvc({
 // pvc.next()
 // 回退到指定版本
 // pvc.rollback(8)
-pvc.rollbackTemplate(8)
+// pvc.rollbackTemplate(8)
 // 获取当前版本的模板
 // pvc.getCurrentDetail().then(rs => {
 //   console.log('====')

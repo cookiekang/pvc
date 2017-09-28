@@ -29,6 +29,7 @@ export default class Pvc {
     this.prefix = op.prefix || 'index'
     this.keyName = this.prefix + '_version'
     this.currentKeyName = `current_${this.prefix}_version`
+    this.currentHtmlName = `current_${this.prefix}_html`
     let redisConfig = Pvc.parseFile(op.redisPath)[op.env]
     for (let area in redisConfig) {
       if (redisConfig.hasOwnProperty(area)) {
@@ -103,12 +104,15 @@ export default class Pvc {
   showHistory () {
     this.create()
     this.get(this.currentKeyName)
+    this.get(this.currentHtmlName)
     let version
 
     this.execFirst().then(currentKey => {
+      const currentHtml = currentKey[1]
       currentKey = currentKey[0]
       if (currentKey) {
         console.log(`当前版本为: ${this.currentKeyName}:${currentKey}`.warn)
+        console.log(`当前版本为: ${this.currentHtmlName}:${currentHtml}`.warn)
         version = parseInt(currentKey.split(':')[1])
       } else {
         console.log(`未查找到当前版本: ${this.currentKeyName}`.warn)
@@ -154,6 +158,8 @@ export default class Pvc {
     let version = 1
     this.create()
     this.get(this.currentKeyName)
+    // 获取当前游标值
+    this.get(this.currentHtmlName)
     this.execFirst().then(currentKey => {
       currentKey = currentKey[0]
       // 最新key递增
@@ -163,12 +169,15 @@ export default class Pvc {
       let create_date = Pvc.makeIndexKey()
       let key = `${this.keyName}:${version}`
       let content = Pvc.readFile(this.op.htmlPath)
+
       this.hmset(key, {
         create_date,
         comment,
         content
       })
       this.set(this.currentKeyName, key)
+      this.set(this.currentHtmlName, content)
+
       this.exec().then(() => {
         console.log('publish done:'.info)
         console.log(`${this.currentKeyName}: ${key}`.blue)
@@ -182,16 +191,19 @@ export default class Pvc {
       version--
       let key = `${this.keyName}:${version}`
       this.exists(key)
-      this.execFirst().then(rs => {
-        rs = rs[0]
-        if (rs) {
-          console.log(`即将回退到上一个版本: ${key}`.warn)
-          this.set(this.currentKeyName, key)
+      console.log(`即将回退到上一个版本: ${key}`.warn)
+
+      this.set(this.currentKeyName, key)
+      this.getCurrentDetail(false).then(res => {
+        if (res) {
+          this.set(this.currentHtmlName, res.content)
           this.exec().then(() => {
             console.log(`已成功回退到上一个版本: ${this.currentKeyName}: ${key}`.warn)
+          }).catch(e => {
+            throw e
           })
         } else {
-          console.log(`未查找到上一个版本: ${key}`.warn)
+          console.log(`未查找到上一个版本${key}的HTML内容`.warn)
           this.destroy()
         }
       })
@@ -200,6 +212,18 @@ export default class Pvc {
   next () {
 
   }
+
+  getCurrentKey (keys) {
+    for (let i = 0; i < keys.length; i++) {
+      let key = keys[i]
+      key = String(key)
+      if (~key.indexOf(':')) {
+        console.log(key)
+        return key
+      }
+    }
+  }
+
   current () {
     let version
     this.create()
@@ -208,7 +232,8 @@ export default class Pvc {
       this.execFirst().then(currentKey => {
         if (currentKey) {
           console.log(`当前版本为: ${this.currentKeyName}:${currentKey}`.warn)
-          currentKey = currentKey[0]
+          currentKey = this.getCurrentKey(currentKey)
+          // currentKey = currentKey[0]
           version = parseInt(currentKey.split(':')[1])
           resolve({
             version,
@@ -221,13 +246,15 @@ export default class Pvc {
       })
     })
   }
-  getCurrentDetail () {
+  getCurrentDetail (autoClose = true) {
     return new Promise((resolve, reject) => {
       this.current().then(obj => {
         this.hgetall(obj.key)
         this.execFirst().then(rs => {
           resolve(rs[0])
-          this.destroy()
+          if (autoClose) {
+            this.destroy()
+          }
         })
       })
     })
@@ -251,6 +278,30 @@ export default class Pvc {
       })
     })
   }
+
+  rollbackTemplate (version) {
+    this.current().then(rs => {
+      let key = `${this.keyName}:${version}`
+      this.exists(key)
+      console.log(`即将回退到第${version}个版本: ${key}`.warn)
+
+      this.set(this.currentKeyName, key)
+      this.getCurrentDetail(false).then(res => {
+        if (res) {
+          this.set(this.currentHtmlName, res.content)
+          this.exec().then(() => {
+            console.log(`已成功回退到第${version}个版本: ${this.currentKeyName}: ${key}`.warn)
+          }).catch(e => {
+            throw e
+          })
+        } else {
+          console.log(`未查找到上一个版本${key}的HTML内容`.warn)
+          this.destroy()
+        }
+      })
+    })
+  }
+
   destroy () {
     this.instanceQueen.forEach(instance => {
       instance.close()

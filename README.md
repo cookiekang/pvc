@@ -97,6 +97,7 @@ pvc publish <e> <d> <br>
 pvc history <e> <br>
 pvc prev <e> <br>
 pvc rollback <e> <t> <br>
+pvc rollbackTemplate <e> <t> <br>
 
 ## 通过API调用
 ### 引入
@@ -147,6 +148,8 @@ pvc.prev()
 ```js
 // 48为版本索引
 pvc.rollback(48)
+// 48为对应索引的HTML
+pvc.rollbackTemplate(48)
 ```
 ## 基础API
 #### 基础redis操作
